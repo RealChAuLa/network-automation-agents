@@ -16,6 +16,10 @@ A Python-based network automation simulation framework for testing AI agents in 
 
 ## Installation
 
+For detailed setup instructions, see [SETUP.md](SETUP.md).
+
+Quick start:
+
 1. Clone the repository:
 ```bash
 git clone https://github.com/RealChAuLa/network-automation-agents.git
