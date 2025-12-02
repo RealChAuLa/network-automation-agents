@@ -107,7 +107,7 @@ def run(interval, duration):
 
     elapsed = time.time() - start_time
     print(f"\n{'=' * 80}")
-    print(f"SIMULATION COMPLETED")
+    print("SIMULATION COMPLETED")
     print(f"{'=' * 80}")
     print(f"Total runtime: {elapsed:.1f} seconds")
     print(f"Iterations: {iteration}")

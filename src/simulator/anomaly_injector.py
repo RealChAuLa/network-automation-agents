@@ -1,7 +1,7 @@
 """Network anomaly injector."""
 
 import random
-from datetime import datetime
+from datetime import datetime, UTC
 from src.models.network import NetworkDevice
 
 
@@ -28,7 +28,7 @@ class AnomalyInjector:
         anomaly_type = random.choice(self.anomaly_types)
 
         anomaly = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "device_id": device.device_id,
             "hostname": device.hostname,
             "ip_address": device.ip_address,

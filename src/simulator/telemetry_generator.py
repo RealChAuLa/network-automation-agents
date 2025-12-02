@@ -1,7 +1,7 @@
 """Network telemetry generator."""
 
 import random
-from datetime import datetime
+from datetime import datetime, UTC
 from src.models.network import NetworkDevice
 
 
@@ -30,7 +30,7 @@ class TelemetryGenerator:
         bandwidth_usage = max(0, min(100, bandwidth_usage))
 
         telemetry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "device_id": device.device_id,
             "hostname": device.hostname,
             "ip_address": device.ip_address,
@@ -41,7 +41,11 @@ class TelemetryGenerator:
                 "bandwidth_usage": bandwidth_usage,
                 "temperature": random.randint(35, 65),
                 "uptime_seconds": random.randint(3600, 31536000),
-                "packet_loss": round(random.uniform(0, 2), 2) if inject_anomaly else round(random.uniform(0, 0.5), 2),
+                "packet_loss": (
+                    round(random.uniform(0, 2), 2)
+                    if inject_anomaly
+                    else round(random.uniform(0, 0.5), 2)
+                ),
                 "latency_ms": random.randint(50, 200) if inject_anomaly else random.randint(1, 10),
             },
         }

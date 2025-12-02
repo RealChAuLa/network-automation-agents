@@ -1,6 +1,5 @@
 """Tests for network simulator."""
 
-import pytest
 from src.simulator.network_sim import NetworkSimulator
 from src.models.network import NetworkTopology
 

@@ -2,7 +2,7 @@
 
 import json
 import random
-from datetime import datetime
+from datetime import datetime, UTC
 from faker import Faker
 from src.models.network import NetworkDevice
 
@@ -51,7 +51,7 @@ class LogGenerator:
         message = random.choice(log_messages[level])
 
         log_entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "device_id": device.device_id,
             "hostname": device.hostname,
             "ip_address": device.ip_address,
