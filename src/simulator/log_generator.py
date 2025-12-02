@@ -5,7 +5,7 @@ Generates realistic syslog-style logs for network devices.
 """
 
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Generator, Optional
 from faker import Faker
 
@@ -225,7 +225,7 @@ class LogGenerator:
             level = self._get_random_level()
         
         if timestamp is None:
-            timestamp = datetime.utcnow()
+            timestamp = datetime.now(timezone.utc)
         
         # Get appropriate templates
         templates = LOG_TEMPLATES.get(source, LOG_TEMPLATES["system"])
@@ -272,7 +272,7 @@ class LogGenerator:
             return []
         
         logs = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         start_time = now - timedelta(minutes=time_range_minutes)
         
         for _ in range(count):
@@ -328,7 +328,7 @@ class LogGenerator:
             List of LogEntry objects
         """
         logs = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         anomaly_messages = {
             "HIGH_CPU": [

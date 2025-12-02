@@ -1,0 +1,428 @@
+# Network Automation Policies
+# These policies define automated responses to network anomalies
+
+policies:
+  # =============================================================================
+  # HIGH CPU Policies
+  # =============================================================================
+  
+  - id: POL-CPU-001
+    name: High CPU - Restart Service
+    description: Restart affected service when CPU is critically high
+    policy_type: remediation
+    status: active
+    priority: 10
+    conditions:
+      - field: anomaly_type
+        operator: equals
+        value: HIGH_CPU
+      - field: severity
+        operator: in
+        value: ["critical", "high"]
+      - field: cpu_utilization
+        operator: greater_than
+        value: 90
+    actions:
+      - action_type: restart_service
+        target: affected_service
+        parameters:
+          graceful: true
+          timeout: 30
+        timeout_seconds: 120
+        retry_count: 1
+    applies_to_node_types:
+      - router_core
+      - router_edge
+      - switch_distribution
+    tags:
+      - cpu
+      - auto-remediation
+
+  - id: POL-CPU-002
+    name: High CPU - Log and Monitor
+    description: Log warning for moderate CPU usage
+    policy_type: remediation
+    status: active
+    priority: 50
+    conditions:
+      - field: anomaly_type
+        operator: equals
+        value: HIGH_CPU
+      - field: severity
+        operator: equals
+        value: medium
+    actions:
+      - action_type: log_only
+        parameters:
+          level: warning
+          message: "Elevated CPU detected, monitoring"
+    tags:
+      - cpu
+      - monitoring
+
+  # =============================================================================
+  # Memory Policies
+  # =============================================================================
+  
+  - id: POL-MEM-001
+    name: Memory Leak - Clear Cache and Restart
+    description: Clear cache and restart service for memory leak
+    policy_type: remediation
+    status: active
+    priority: 20
+    conditions:
+      - field: anomaly_type
+        operator: equals
+        value: MEMORY_LEAK
+      - field: severity
+        operator: in
+        value: ["critical", "high"]
+    actions:
+      - action_type: clear_cache
+        parameters:
+          scope: all
+      - action_type: restart_service
+        target: affected_service
+        parameters:
+          graceful: true
+    applies_to_node_types:
+      - server
+      - router_core
+    tags:
+      - memory
+      - auto-remediation
+
+  # =============================================================================
+  # Interface Policies
+  # =============================================================================
+  
+  - id: POL-INT-001
+    name: Interface Down - Failover
+    description: Trigger failover when interface goes down
+    policy_type: remediation
+    status: active
+    priority: 5
+    conditions:
+      - field: anomaly_type
+        operator: equals
+        value: INTERFACE_DOWN
+      - field: severity
+        operator: equals
+        value: critical
+    actions:
+      - action_type: failover
+        parameters:
+          mode: automatic
+          verify_backup: true
+      - action_type: notify
+        parameters:
+          channel: ops-alerts
+          priority: high
+    applies_to_node_types:
+      - router_core
+      - switch_distribution
+    tags:
+      - interface
+      - failover
+      - critical
+
+  - id: POL-INT-002
+    name: Packet Loss - Investigate
+    description: Log and monitor packet loss issues
+    policy_type: remediation
+    status: active
+    priority: 40
+    conditions:
+      - field: anomaly_type
+        operator: equals
+        value: PACKET_LOSS
+      - field: severity
+        operator: in
+        value: ["medium", "high"]
+    actions:
+      - action_type: log_only
+        parameters:
+          level: warning
+          include_diagnostics: true
+      - action_type: notify
+        parameters:
+          channel: network-ops
+          priority: medium
+    tags:
+      - packet-loss
+      - monitoring
+
+  # =============================================================================
+  # Latency Policies
+  # =============================================================================
+  
+  - id: POL-LAT-001
+    name: High Latency - Rate Limit
+    description: Apply rate limiting when latency is high
+    policy_type: remediation
+    status: active
+    priority: 30
+    conditions:
+      - field: anomaly_type
+        operator: equals
+        value: HIGH_LATENCY
+      - field: severity
+        operator: in
+        value: ["critical", "high"]
+    actions:
+      - action_type: rate_limit
+        parameters:
+          reduction_percent: 20
+          duration_minutes: 15
+    tags:
+      - latency
+      - traffic-management
+
+  # =============================================================================
+  # Security Policies
+  # =============================================================================
+  
+  - id: POL-SEC-001
+    name: Auth Failure - Block and Alert
+    description: Block IP and alert on authentication failures
+    policy_type: remediation
+    status: active
+    priority: 1
+    conditions:
+      - field: anomaly_type
+        operator: equals
+        value: AUTH_FAILURE
+      - field: severity
+        operator: in
+        value: ["critical", "high"]
+    actions:
+      - action_type: block_traffic
+        parameters:
+          duration_minutes: 60
+          source: offending_ip
+      - action_type: notify
+        parameters:
+          channel: security-alerts
+          priority: critical
+      - action_type: escalate
+        parameters:
+          team: security
+    tags:
+      - security
+      - authentication
+      - critical
+
+  - id: POL-SEC-002
+    name: Config Drift - Alert and Log
+    description: Alert on configuration drift detection
+    policy_type: compliance
+    status: active
+    priority: 25
+    conditions:
+      - field: anomaly_type
+        operator: equals
+        value: CONFIG_DRIFT
+    actions:
+      - action_type: log_only
+        parameters:
+          level: error
+          capture_config: true
+      - action_type: notify
+        parameters:
+          channel: security-alerts
+          priority: high
+      - action_type: escalate
+        parameters:
+          team: security
+    tags:
+      - security
+      - compliance
+      - config-drift
+
+  # =============================================================================
+  # Temperature Policies
+  # =============================================================================
+  
+  - id: POL-TEMP-001
+    name: High Temperature - Reduce Load
+    description: Reduce workload when temperature is high
+    policy_type: remediation
+    status: active
+    priority: 15
+    conditions:
+      - field: anomaly_type
+        operator: equals
+        value: TEMPERATURE_HIGH
+      - field: severity
+        operator: in
+        value: ["critical", "high"]
+    actions:
+      - action_type: scale_down
+        parameters:
+          reduction_percent: 30
+      - action_type: notify
+        parameters:
+          channel: datacenter-ops
+          priority: critical
+    applies_to_node_types:
+      - server
+      - router_core
+    tags:
+      - temperature
+      - datacenter
+
+  # =============================================================================
+  # Escalation Policies
+  # =============================================================================
+  
+  - id: POL-ESC-001
+    name: Service Degradation - Escalate
+    description: Escalate to operations team for service degradation
+    policy_type: escalation
+    status: active
+    priority: 15
+    conditions:
+      - field: anomaly_type
+        operator: equals
+        value: SERVICE_DEGRADATION
+      - field: severity
+        operator: equals
+        value: critical
+    actions:
+      - action_type: notify
+        parameters:
+          channel: ops-critical
+          priority: critical
+      - action_type: escalate
+        parameters:
+          team: operations
+          sla_minutes: 15
+    tags:
+      - escalation
+      - service-degradation
+
+  # =============================================================================
+  # Maintenance Policies
+  # =============================================================================
+  
+  - id: POL-MAINT-001
+    name: Disk Full - Cleanup
+    description: Trigger disk cleanup when disk is full
+    policy_type: maintenance
+    status: active
+    priority: 35
+    conditions:
+      - field: anomaly_type
+        operator: equals
+        value: DISK_FULL
+      - field: severity
+        operator: in
+        value: ["critical", "high"]
+    actions:
+      - action_type: clear_cache
+        parameters:
+          scope: logs
+          older_than_days: 7
+      - action_type: notify
+        parameters:
+          channel: ops-alerts
+          priority: medium
+    applies_to_node_types:
+      - server
+    tags:
+      - disk
+      - maintenance
+
+# =============================================================================
+# Compliance Rules
+# =============================================================================
+
+compliance_rules:
+  - id: COMP-001
+    name: Maintenance Window Required
+    description: Major changes require maintenance window
+    regulation: INTERNAL
+    severity: high
+    check_type: maintenance_window
+    parameters:
+      required_for:
+        - restart_node
+        - failover
+        - update_config
+      window_hours:
+        start: 2
+        end: 6
+      timezone: UTC
+    enforcement: block
+    tags:
+      - maintenance
+      - change-control
+
+  - id: COMP-002
+    name: Change Approval Required
+    description: Configuration changes require approval
+    regulation: SOC2
+    severity: high
+    check_type: approval_required
+    parameters:
+      required_for:
+        - update_config
+      approvers:
+        - network-admins
+        - change-board
+    enforcement: block
+    tags:
+      - soc2
+      - change-control
+
+  - id: COMP-003
+    name: Audit Trail Required
+    description: All actions must be logged to audit trail
+    regulation: SOC2
+    severity: medium
+    check_type: audit_logging
+    parameters:
+      log_fields:
+        - timestamp
+        - action
+        - actor
+        - target
+        - result
+    enforcement: warn
+    tags:
+      - soc2
+      - audit
+
+  - id: COMP-004
+    name: Dual Authorization for Critical Systems
+    description: Critical system changes require dual authorization
+    regulation: PCI-DSS
+    severity: critical
+    check_type: dual_authorization
+    parameters:
+      required_for:
+        - restart_node
+        - update_config
+        - failover
+      applies_to_node_types:
+        - firewall
+        - router_core
+    enforcement: block
+    tags:
+      - pci-dss
+      - critical-systems
+
+  - id: COMP-005
+    name: Rate Limit Automated Actions
+    description: Limit automated remediation frequency
+    regulation: INTERNAL
+    severity: medium
+    check_type: rate_limit
+    parameters:
+      max_actions_per_hour: 10
+      max_actions_per_node_per_hour: 3
+      cooldown_minutes: 5
+    enforcement: block
+    tags:
+      - rate-limiting
+      - safety

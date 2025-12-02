@@ -6,7 +6,7 @@ Generates realistic network telemetry and metrics data.
 
 import random
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from src.models.network import (
@@ -194,7 +194,7 @@ class TelemetryGenerator:
             MetricReading object
         """
         if timestamp is None:
-            timestamp = datetime.utcnow()
+            timestamp = datetime.now(timezone.utc)
 
         baseline = self.get_baseline(node)
         metric_baseline = baseline.get(metric_type, DEFAULT_BASELINE. get(metric_type))
@@ -262,7 +262,7 @@ class TelemetryGenerator:
             TelemetrySnapshot object
         """
         if timestamp is None:
-            timestamp = datetime.utcnow()
+            timestamp = datetime.now(timezone.utc)
 
         if metric_types is None:
             metric_types = [
@@ -335,7 +335,7 @@ class TelemetryGenerator:
     ) -> list[TelemetrySnapshot]:
         """Generate snapshots for all nodes in the network."""
         if timestamp is None:
-            timestamp = datetime.utcnow()
+            timestamp = datetime.now(timezone.utc)
 
         return [
             self. generate_snapshot(node, timestamp)
@@ -362,7 +362,7 @@ class TelemetryGenerator:
             List of TelemetrySnapshot objects
         """
         snapshots = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         start_time = now - timedelta(minutes=duration_minutes)
 
         current_time = start_time

@@ -2,7 +2,7 @@
 Network data models using Pydantic for type safety and validation.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 from pydantic import BaseModel, Field
@@ -224,4 +224,4 @@ class Anomaly(BaseModel):
     def end(self) -> None:
         """Mark the anomaly as ended."""
         self.is_active = False
-        self.ended_at = datetime.utcnow()
+        self.ended_at = datetime.now(timezone.utc)
