@@ -31,6 +31,8 @@ dependencies = [
     "rich>=13.0.0",
     "neo4j>=5.14.0",
     "pyyaml>=6.0",
+    "mcp>=1.0.0",
+    "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]
@@ -45,7 +47,8 @@ dev = [
 
 [project.scripts]
 network-sim = "src.simulator.runner:cli"
-knowledge-graph = "src.knowledge_graph. cli:cli"
+knowledge-graph = "src.knowledge_graph.cli:cli"
+mcp-server = "src.mcp_server.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
