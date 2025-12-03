@@ -6,20 +6,25 @@ Main entry point for the Model Context Protocol server.
 
 import asyncio
 import logging
-from typing import Optional
+import json
+from typing import Any
 
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
+from mcp. server import Server
+from mcp. server.stdio import stdio_server
+from mcp.types import Tool, TextContent
 
 from src.mcp_server.config import config
-from src.mcp_server.tools.telemetry import register_telemetry_tools
-from src.mcp_server.tools.topology import register_topology_tools
-from src.mcp_server.tools.policy import register_policy_tools
-from src.mcp_server.tools.execution import register_execution_tools
-from src.mcp_server.tools.diagnosis import register_diagnosis_tools
+
+# Import tool handlers
+from src.mcp_server.tools import telemetry_handlers
+from src.mcp_server.tools import topology_handlers
+from src.mcp_server.tools import policy_handlers
+from src. mcp_server. tools import execution_handlers
+from src.mcp_server.tools import diagnosis_handlers
+
 
 # Configure logging
-logging.basicConfig(
+logging. basicConfig(
     level=getattr(logging, config.log_level),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
@@ -35,21 +40,49 @@ def create_server() -> Server:
     """
     server = Server(config.server_name)
 
-    # Register all tools
-    logger.info("Registering telemetry tools...")
-    register_telemetry_tools(server)
+    # Collect all tools from all modules
+    all_tools = []
+    all_tools.extend(telemetry_handlers. get_tools())
+    all_tools.extend(topology_handlers.get_tools())
+    all_tools.extend(policy_handlers.get_tools())
+    all_tools.extend(execution_handlers. get_tools())
+    all_tools. extend(diagnosis_handlers.get_tools())
 
-    logger.info("Registering topology tools...")
-    register_topology_tools(server)
+    logger.info(f"Registered {len(all_tools)} tools")
 
-    logger.info("Registering policy tools...")
-    register_policy_tools(server)
+    # Create tool lookup
+    tool_handlers = {}
+    tool_handlers.update(telemetry_handlers. get_handlers())
+    tool_handlers.update(topology_handlers.get_handlers())
+    tool_handlers.update(policy_handlers.get_handlers())
+    tool_handlers.update(execution_handlers. get_handlers())
+    tool_handlers. update(diagnosis_handlers.get_handlers())
 
-    logger.info("Registering execution tools...")
-    register_execution_tools(server)
+    @server.list_tools()
+    async def list_tools() -> list[Tool]:
+        """List all available tools."""
+        return all_tools
 
-    logger.info("Registering diagnosis tools...")
-    register_diagnosis_tools(server)
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+        """Route tool calls to appropriate handlers."""
+        logger.info(f"Tool called: {name} with arguments: {arguments}")
+
+        if name in tool_handlers:
+            try:
+                result = await tool_handlers[name](arguments)
+                return result
+            except Exception as e:
+                logger.error(f"Error in tool {name}: {e}")
+                return [TextContent(type="text", text=json.dumps({
+                    "error": str(e),
+                    "tool": name
+                }, indent=2))]
+        else:
+            return [TextContent(type="text", text=json.dumps({
+                "error": f"Unknown tool: {name}",
+                "available_tools": list(tool_handlers.keys())
+            }, indent=2))]
 
     logger.info(f"MCP Server '{config.server_name}' configured successfully")
 
@@ -61,13 +94,13 @@ async def run_server():
     server = create_server()
 
     logger.info(f"Starting MCP Server v{config.server_version}...")
-    logger.info(f"Server name: {config.server_name}")
+    logger. info(f"Server name: {config.server_name}")
 
     async with stdio_server() as (read_stream, write_stream):
-        await server.run(
+        await server. run(
             read_stream,
             write_stream,
-            server.create_initialization_options()
+            server. create_initialization_options()
         )
 
 
@@ -78,7 +111,7 @@ def main():
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception as e:
-        logger.error(f"Server error: {e}")
+        logger. error(f"Server error: {e}")
         raise
 
 

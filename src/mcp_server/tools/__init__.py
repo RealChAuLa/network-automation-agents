@@ -4,16 +4,16 @@ MCP Tools Package
 Contains all tools exposed by the MCP server.
 """
 
-from src.mcp_server.tools.telemetry import register_telemetry_tools
-from src.mcp_server.tools.topology import register_topology_tools
-from src.mcp_server.tools.policy import register_policy_tools
-from src. mcp_server. tools.execution import register_execution_tools
-from src.mcp_server.tools. diagnosis import register_diagnosis_tools
+from src.mcp_server.tools import telemetry_handlers
+from src.mcp_server.tools import topology_handlers
+from src.mcp_server.tools import policy_handlers
+from src.mcp_server.tools import execution_handlers
+from src. mcp_server. tools import diagnosis_handlers
 
 __all__ = [
-    "register_telemetry_tools",
-    "register_topology_tools",
-    "register_policy_tools",
-    "register_execution_tools",
-    "register_diagnosis_tools",
+    "telemetry_handlers",
+    "topology_handlers",
+    "policy_handlers",
+    "execution_handlers",
+    "diagnosis_handlers",
 ]
