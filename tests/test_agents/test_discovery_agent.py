@@ -64,7 +64,7 @@ class TestDiagnosisReport:
         assert report.scope == "network-wide"
         assert report.nodes_analyzed == 10
         assert report.id.startswith("diag_")
-        assert report.overall_status == IssueSeverity.INFO
+        assert report.overall_status == IssueSeverity.HEALTHY
 
     def test_add_issue_updates_counts(self):
         """Test that adding issues updates counts correctly."""
@@ -348,7 +348,7 @@ class TestDiscoveryAgent:
         report = result.result
         assert isinstance(report, DiagnosisReport)
         assert report.nodes_analyzed > 0
-        assert report.analysis_method == "rule-based"
+        assert report.analysis_method == "mcp-rule-based"
 
     @pytest.mark.asyncio
     async def test_run_single_node(self, agent):
@@ -367,13 +367,12 @@ class TestDiscoveryAgent:
 
         assert result.success is True
         report = result.result
-        assert report.analysis_method == "rule-based"
+        assert report.analysis_method == "mcp-rule-based"
 
-    def test_get_active_anomalies(self, agent):
+    @pytest.mark.asyncio
+    async def test_get_active_anomalies(self, agent):
         """Test getting active anomalies."""
-        anomalies = agent.get_active_anomalies()
-
-        # Should return a list (might be empty)
+        anomalies = await agent.get_active_anomalies()
         assert isinstance(anomalies, list)
 
     def test_execution_history(self, agent):
@@ -396,7 +395,7 @@ class TestLLMIntegration:
 
     @pytest.mark.asyncio
     async def test_llm_not_available_uses_rule_based(self):
-        """Test that rule-based is used when LLM is not available."""
+        """Test that mcp-rule-based is used when LLM is not available."""
         agent = DiscoveryAgent()
 
         # Force LLM unavailable
@@ -405,7 +404,7 @@ class TestLLMIntegration:
         result = await agent.run()
 
         assert result.success is True
-        assert result.result.analysis_method == "rule-based"
+        assert result.result.analysis_method == "mcp-rule-based"
 
     @pytest.mark.asyncio
     async def test_use_llm_false_skips_llm(self):
@@ -415,7 +414,7 @@ class TestLLMIntegration:
         result = await agent.run(use_llm=False)
 
         assert result.success is True
-        assert result.result.analysis_method == "rule-based"
+        assert result.result.analysis_method == "mcp-rule-based"
         assert result.result.llm_provider is None
 
 

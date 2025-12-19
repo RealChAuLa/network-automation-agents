@@ -19,6 +19,7 @@ class IssueSeverity(str, Enum):
     MEDIUM = "medium"
     LOW = "low"
     HEALTHY = "healthy"
+    INFO = "info"
 
 
 class IssueType(str, Enum):
