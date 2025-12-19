@@ -32,7 +32,7 @@ class LLMConfig:
 
     # LLM Settings
     temperature: float = field(default_factory=lambda: float(os.getenv("LLM_TEMPERATURE", "0.1")))
-    max_tokens: int = field(default_factory=lambda: int(os.getenv("LLM_MAX_TOKENS", "4096")))
+    max_tokens: int = field(default_factory=lambda: int(os.getenv("LLM_MAX_TOKENS", "8192")))
 
     def is_llm_available(self) -> bool:
         """Check if any LLM is configured and available."""

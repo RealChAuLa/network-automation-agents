@@ -1,141 +1,128 @@
 """
 Discovery Agent Prompts
 
-LLM prompts for network analysis and diagnosis.
+LLM prompts for the Discovery Agent.
 """
 
-SYSTEM_PROMPT = """You are an expert network operations engineer specializing in telecom network monitoring and diagnosis. 
+DISCOVERY_AGENT_SYSTEM_PROMPT = """You are an expert Network Discovery Agent. You analyze network telemetry and produce JSON diagnosis reports.
 
-Your role is to analyze network telemetry data, logs, and metrics to:
-1. Identify anomalies and issues
-2. Determine severity levels
-3. Find potential root causes
-4. Recommend remediation actions
+You MUST ALWAYS respond with valid JSON only. No explanations, no markdown, just pure JSON.
 
-You have deep knowledge of:
-- Network protocols (BGP, OSPF, MPLS, etc.)
-- Network devices (routers, switches, firewalls, load balancers)
-- Performance metrics (CPU, memory, bandwidth, latency, packet loss)
-- Common network issues and their symptoms
-- Best practices for network operations
+Your role is to:
+1. Monitor the network for anomalies and issues
+2. Analyze telemetry data, logs, and alerts
+3. Identify problems and their severity
+4. Determine root causes
+5. Provide actionable recommendations
 
-Always provide structured, actionable insights based on the data provided."""
+You have access to the following tools:
+{tools}
 
+When analyzing the network:
+1. First, gather data using get_node_metrics and get_network_logs
+2. Check for active alerts using get_alerts
+3. Understand the topology context using get_network_topology
+4.  Analyze the data to identify issues
+5. For each issue found, determine:
+   - Issue type (HIGH_CPU, MEMORY_LEAK, PACKET_LOSS, etc.)
+   - Severity (critical, high, medium, low)
+   - Affected node(s)
+   - Potential root cause
+   - Recommended actions
+6. Provide a structured diagnosis report
 
-LOG_ANALYSIS_PROMPT = """Analyze the following network logs and identify any issues or anomalies. 
-
-Logs:
-{logs}
-
-For each issue found, provide:
-1. Issue type (e.g., HIGH_CPU, PACKET_LOSS, AUTH_FAILURE)
-2.  Severity (critical, high, medium, low)
-3.  Affected node(s)
-4. Description of the issue
-5. Potential causes
-6. Recommended actions
-
-If no issues are found, state that the logs appear normal."""
+Always be thorough but concise. Focus on actionable insights."""
 
 
-METRIC_ANALYSIS_PROMPT = """Analyze the following network metrics and identify any issues or anomalies. 
+DISCOVERY_TASK_PROMPT = """Perform a network discovery and diagnosis. 
 
-Node: {node_name} ({node_type})
-Current Metrics:
-{metrics}
+Scope: {scope}
 
-Thresholds:
-- CPU Warning: {cpu_warning}%, Critical: {cpu_critical}%
-- Memory Warning: {memory_warning}%, Critical: {memory_critical}%
-- Packet Loss Warning: {packet_loss_warning}%, Critical: {packet_loss_critical}%
-- Latency Warning: {latency_warning}ms, Critical: {latency_critical}ms
+Instructions:
+1.  Collect current metrics from {scope_description}
+2.  Retrieve recent logs (last 60 minutes)
+3. Check for any active alerts
+4.  Analyze all collected data for anomalies
+5. Create a diagnosis report
 
-For any metric exceeding thresholds, provide:
-1. Issue type
-2. Severity
-3. Current value vs threshold
-4.  Potential causes
-5. Recommended actions
+Provide your findings in the following JSON format:
+```json
+{{
+    "overall_status": "critical|high|medium|low|healthy",
+    "summary": "Brief summary of network health",
+    "issues": [
+        {{
+            "issue_type": "HIGH_CPU|MEMORY_LEAK|PACKET_LOSS|HIGH_LATENCY|INTERFACE_DOWN|AUTH_FAILURE|CONFIG_DRIFT|TEMPERATURE_HIGH",
+            "severity": "critical|high|medium|low",
+            "node_id": "affected node id",
+            "node_name": "affected node name",
+            "description": "Description of the issue",
+            "current_value": 95. 5,
+            "threshold_value": 90. 0,
+            "unit": "%",
+            "potential_causes": ["cause1", "cause2"],
+            "recommended_actions": ["action1", "action2"]
+        }}
+    ],
+    "root_cause_analysis": "Analysis of root cause if multiple issues are related",
+    "recommendations": ["Overall recommendation 1", "Overall recommendation 2"]
+}}
+Now, use the available tools to gather data and provide your diagnosis."""
 
-If all metrics are within normal ranges, state that the node is healthy."""
+ANALYSIS_PROMPT = """Analyze this network data and respond with ONLY a JSON object (no markdown, no explanation):
 
+METRICS:
+{metrics_data}
 
-ROOT_CAUSE_ANALYSIS_PROMPT = """Based on the following detected issues across the network, perform a root cause analysis. 
+LOGS:
+{log_data}
 
-Detected Issues:
-{issues}
+ALERTS:
+{alerts_data}
 
-Network Topology Context:
-{topology_context}
+TOPOLOGY:
+{topology_data}
 
-Recent Logs Summary:
-{logs_summary}
+Analyze this data and provide a diagnosis report in JSON format as specified.  
+Focus on: 
+1. Any metrics exceeding normal thresholds
+2. Error or warning patterns in logs
+3. Active alerts and their implications
+4. Potential correlations between issues
 
-Please provide:
-1. Root Cause Analysis: What is the likely root cause of these issues?
-2. Correlation: Are these issues related?  If so, how?
-3.  Impact Assessment: What is the impact on the network?
-4. Priority Ranking: Which issues should be addressed first?
-5.  Remediation Plan: Step-by-step recommended actions
+Thresholds for reference:
+- CPU: Warning > 80%, Critical > 90%
+- Memory: Warning > 80%, Critical > 90%  
+- Packet Loss: Warning > 2%, Critical > 5%
+- Latency: Warning > 30ms, Critical > 50ms
+- Temperature: Warning > 70°C, Critical > 85°C
 
-Be specific and actionable in your recommendations."""
+Respond with ONLY this JSON structure (no ```json, no explanation, just the raw JSON):
+{{
+    "overall_status": "healthy",
+    "summary": "Brief summary here",
+    "issues": [
+        {{
+            "issue_type": "HIGH_CPU",
+            "severity": "critical",
+            "node_id": "node_id_here",
+            "node_name": "node_name_here",
+            "description": "Description here",
+            "current_value": 95. 0,
+            "threshold_value": 90.0,
+            "unit": "%",
+            "potential_causes": ["cause1", "cause2"],
+            "recommended_actions": ["action1", "action2"]
+        }}
+    ],
+    "root_cause_analysis": "Root cause if issues are related",
+    "recommendations": ["recommendation1", "recommendation2"]
+}}
 
+If no issues found, return empty issues array and overall_status "healthy". 
+RESPOND WITH ONLY THE JSON OBJECT: 
+"""
 
-DIAGNOSIS_SUMMARY_PROMPT = """Summarize the following network diagnosis in a clear, executive-friendly format.
+TOOL_CALL_FORMAT = """To use a tool, respond with: <tool_call> {{"tool": "tool_name", "arguments": {{"arg1": "value1"}}}} </tool_call>
 
-Diagnosis Report:
-{report}
-
-Provide:
-1. One-paragraph executive summary
-2. Top 3 most critical findings
-3. Immediate actions required
-4. Longer-term recommendations
-
-Keep the language clear and avoid excessive technical jargon."""
-
-
-ANOMALY_DETECTION_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "issues_found": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "issue_type": {"type": "string"},
-                    "severity": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
-                    "node_id": {"type": "string"},
-                    "description": {"type": "string"},
-                    "potential_causes": {"type": "array", "items": {"type": "string"}},
-                    "recommended_actions": {"type": "array", "items": {"type": "string"}},
-                }
-            }
-        },
-        "overall_assessment": {"type": "string"},
-        "risk_level": {"type": "string", "enum": ["critical", "high", "medium", "low", "healthy"]},
-    }
-}
-
-
-ROOT_CAUSE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "root_cause": {"type": "string"},
-        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
-        "related_issues": {"type": "array", "items": {"type": "string"}},
-        "impact_assessment": {"type": "string"},
-        "priority_ranking": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "issue_id": {"type": "string"},
-                    "priority": {"type": "integer"},
-                    "reason": {"type": "string"},
-                }
-            }
-        },
-        "remediation_steps": {"type": "array", "items": {"type": "string"}},
-    }
-}
+After receiving the tool result, continue your analysis. When you have gathered enough data, provide your final diagnosis in JSON format."""
