@@ -12,6 +12,7 @@ from src.agents.mcp_client import MCPClient
 from src.agents.discovery import DiscoveryAgent
 from src.agents.policy import PolicyAgent
 from src.agents.compliance import ComplianceAgent
+from src. agents.execution import ExecutionAgent
 
 __all__ = [
     "AgentConfig",
@@ -20,4 +21,5 @@ __all__ = [
     "DiscoveryAgent",
     "PolicyAgent",
     "ComplianceAgent",
+    "ExecutionAgent",
 ]
