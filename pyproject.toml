@@ -39,6 +39,8 @@ dependencies = [
     "langchain-google-genai>=2.0.0",
     # Scheduling
     "schedule>=1.2.0",
+    # immudb
+    "immudb-py>=1.5.0",
 ]
 
 [project.optional-dependencies]
@@ -56,6 +58,10 @@ network-sim = "src.simulator.runner:cli"
 knowledge-graph = "src.knowledge_graph.cli:cli"
 mcp-server = "src.mcp_server.server:main"
 discovery-agent = "src.agents.discovery.runner:cli"
+policy-agent = "src.agents.policy.runner:cli"
+compliance-agent = "src.agents.compliance.runner:cli"
+execution-agent = "src.agents.execution.runner:cli"
+audit = "src.audit.cli:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]

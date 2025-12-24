@@ -1,7 +1,7 @@
 """
-Execution Agent
+Execution Agent (with Audit Logging)
 
-The Execution Agent that executes approved actions on the network.
+The Execution Agent that executes approved actions on the network with immutable audit logging via immudb.
 """
 
 import json
@@ -34,6 +34,9 @@ from src.agents.compliance.models import (
     ValidationStatus,
 )
 
+# Import audit logger
+from src.audit.logger import AuditLogger
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,22 +46,25 @@ class ExecutionAgent(BaseAgent):
 
     This agent:
     1. Receives ComplianceResult with approved actions
-    2. Executes each approved action via MCP tools
-    3. Verifies execution success
-    4. Handles failures with retry/rollback
-    5. Produces ExecutionResult with full audit trail
+    2. Logs intent to immudb (before execution)
+    3. Executes each approved action via MCP tools
+    4. Verifies execution success
+    5. Logs result to immudb (after execution)
+    6. Handles failures with retry/rollback
+    7. Produces ExecutionResult with full audit trail
 
     Example:
-        >>> agent = ExecutionAgent()
-        >>> compliance_result = await compliance_agent.validate(recommendation)
-        >>> result = await agent.execute(compliance_result. result)
-        >>> print(result.result. get_summary())
+         agent = ExecutionAgent()
+         compliance_result = await compliance_agent.validate(recommendation)
+         result = await agent.execute(compliance_result. result)
+         print(result.result. get_summary())
     """
 
     def __init__(
             self,
             config: Optional[AgentConfig] = None,
             llm: Optional[BaseLLM] = None,
+            audit_logger: Optional[AuditLogger] = None,
     ):
         """
         Initialize the Execution Agent.
@@ -66,6 +72,7 @@ class ExecutionAgent(BaseAgent):
         Args:
             config: Agent configuration
             llm: LLM instance (creates one based on config if not provided)
+            audit_logger: Audit logger instance (creates one if not provided)
         """
         super().__init__(name="execution", config=config)
 
@@ -75,6 +82,10 @@ class ExecutionAgent(BaseAgent):
 
         # Initialize MCP Client
         self.mcp_client = MCPClient()
+
+        # Initialize Audit Logger
+        self.audit = audit_logger or AuditLogger()
+        self._audit_connected = False
 
         # Execution settings
         self.verify_after_execution = True
@@ -88,6 +99,12 @@ class ExecutionAgent(BaseAgent):
             logger.warning("Execution Agent:  No LLM available for verification analysis")
 
         logger.info(f"Execution Agent has access to {len(self.mcp_client.get_available_tools())} MCP tools")
+
+    def _ensure_audit_connected(self):
+        """Ensure audit logger is connected."""
+        if not self._audit_connected:
+            self.audit.connect()
+            self._audit_connected = True
 
     async def run(
             self,
@@ -141,6 +158,9 @@ class ExecutionAgent(BaseAgent):
         result = self._create_result()
         start_time = time.time()
         tool_calls = 0
+
+        # Ensure audit is connected
+        self._ensure_audit_connected()
 
         try:
             self.logger.info(f"Executing actions from compliance result: {compliance_result.id}")
@@ -196,6 +216,7 @@ class ExecutionAgent(BaseAgent):
     async def _execute_single_action(
             self,
             validation: ActionValidation,
+            compliance_result: Optional[ComplianceResult] = None,
             verify: bool = True,
             dry_run: bool = False,
     ) -> ActionExecution:
@@ -210,8 +231,33 @@ class ExecutionAgent(BaseAgent):
         )
 
         tool_calls = 0
+        intent_record_id = ""
 
         try:
+            # Step 0: Log intent to audit (before execution)
+            self.logger.info(f"Logging intent:  {execution.action_type} on {execution.target_node_id}")
+
+            if not dry_run:
+                intent_result = self.audit.log_intent(
+                    action_type=execution.action_type,
+                    target_node_id=execution.target_node_id,
+                    target_node_name=execution.target_node_name,
+                    target_node_type=execution.target_node_type,
+                    reason=execution.reason or "Automated remediation",
+                    original_issue_type=execution.source_issue_type,
+                    policy_ids=[execution.source_policy_id] if execution.source_policy_id else [],
+                    compliance_status="approved",
+                    approved_by=validation.approved_by,
+                    diagnosis_id=compliance_result.diagnosis_id if compliance_result else "",
+                    recommendation_id=compliance_result.recommendation_id if compliance_result else "",
+                    compliance_id=compliance_result.id if compliance_result else "",
+                    action_id=execution.action_id,
+                    execution_id=execution.id,
+                    agent_name="execution",
+                )
+                intent_record_id = intent_result.get("record_id", "")
+                self.logger.info(f"Intent logged: {intent_record_id}")
+
             # Step 1: Pre-execution check - get current metrics
             self.logger.info(f"Executing:  {execution.action_type} on {execution.target_node_id}")
 
@@ -277,11 +323,54 @@ class ExecutionAgent(BaseAgent):
                 execution = await self._retry_execution(execution, validation)
                 tool_calls += execution.retry_count
 
+            # Step 5: Log result to audit (after execution)
+            if not dry_run:
+                self.audit.log_result(
+                    action_type=execution.action_type,
+                    target_node_id=execution.target_node_id,
+                    target_node_name=execution.target_node_name,
+                    success=execution.success,
+                    status=execution.status. value,
+                    result_message=execution. result_message,
+                    error_message=execution. error_message,
+                    started_at=execution. started_at,
+                    completed_at=execution.completed_at,
+                    duration_ms=execution. duration_ms,
+                    retry_count=execution. retry_count,
+                    verified=execution.verification.status != VerificationStatus. NOT_VERIFIED,
+                    verification_status=execution.verification. status.value,
+                    metrics_before=execution. verification.metrics_before,
+                    metrics_after=execution. verification.metrics_after,
+                    improvement_detected=execution.verification.improvement_detected,
+                    intent_record_id=intent_record_id,
+                    diagnosis_id=compliance_result.diagnosis_id if compliance_result else "",
+                    recommendation_id=compliance_result.recommendation_id if compliance_result else "",
+                    compliance_id=compliance_result.id if compliance_result else "",
+                    action_id=execution.action_id,
+                    execution_id=execution.id,
+                    agent_name="execution",
+                )
+                self.logger.info(f"Result logged for execution:  {execution.id}")
+
         except Exception as e:
             self.logger.error(f"Error executing action: {e}")
             execution.complete_failure(error=str(e))
 
+            # Log failure to audit
+            if not dry_run:
+                self.audit.log_result(
+                    action_type=execution.action_type,
+                    target_node_id=execution.target_node_id,
+                    success=False,
+                    status="failed",
+                    error_message=str(e),
+                    intent_record_id=intent_record_id,
+                    execution_id=execution. id,
+                    agent_name="execution",
+                )
+
         execution.metadata["tool_calls"] = tool_calls
+        execution.metadata["intent_record_id"] = intent_record_id
         return execution
 
     async def _verify_execution(
@@ -397,6 +486,7 @@ class ExecutionAgent(BaseAgent):
             self,
             execution: ActionExecution,
             validation: ActionValidation,
+            compliance_result: Optional[ComplianceResult] = None,
     ) -> ActionExecution:
         """Retry a failed execution."""
 
@@ -506,3 +596,8 @@ class ExecutionAgent(BaseAgent):
         if result.success:
             return result.data
         return None
+
+    def get_audit_stats(self) -> dict:
+        """Get audit statistics."""
+        self._ensure_audit_connected()
+        return self.audit.get_stats()

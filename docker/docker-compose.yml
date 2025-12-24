@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  neo4j:
+    image: neo4j:5.15.0
+    container_name:  network-automation-neo4j
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/password
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - network-automation
+
+  immudb:
+    image: codenotary/immudb:1.9.4
+    container_name: network-automation-immudb
+    ports:
+      - "3322:3322"   # gRPC
+      - "8080:8080"   # REST API / Web Console
+      - "9497:9497"   # Metrics
+    environment:
+      - IMMUDB_ADDRESS=0.0.0.0
+      - IMMUDB_PORT=3322
+      - IMMUDB_ADMIN_PASSWORD=immudb
+    volumes:
+      - immudb_data:/var/lib/immudb
+    networks:
+      - network-automation
+
+  # Optional: Redis for caching/queuing (future use)
+  redis:
+    image: redis:7-alpine
+    container_name: network-automation-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - network-automation
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  immudb_data:
+  redis_data:
+
+networks:
+  network-automation:
+    driver: bridge

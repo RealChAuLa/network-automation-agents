@@ -11,6 +11,7 @@ import re
 from datetime import datetime
 from typing import Any, Optional
 
+from src.audit.logger import AuditLogger
 from src.agents.base import BaseAgent, AgentResult
 from src.agents.config import AgentConfig, config as default_config
 from src.agents.llm import create_llm, BaseLLM
@@ -45,10 +46,10 @@ class ComplianceAgent(BaseAgent):
     5. Produces a ComplianceResult for the Execution Agent
 
     Example:
-        >>> agent = ComplianceAgent()
-        >>> policy_result = await policy_agent.evaluate(diagnosis)
-        >>> result = await agent.validate(policy_result. result)
-        >>> print(result.result. get_summary())
+         agent = ComplianceAgent()
+         policy_result = await policy_agent.evaluate(diagnosis)
+         result = await agent.validate(policy_result. result)
+         print(result.result. get_summary())
     """
 
     def __init__(
@@ -72,6 +73,10 @@ class ComplianceAgent(BaseAgent):
         # Initialize MCP Client
         self.mcp_client = MCPClient()
 
+        # Initialize Audit Logger
+        self.audit = AuditLogger()
+        self._audit_connected = False
+
         # Initialize compliance checker
         self.checker = ComplianceChecker()
 
@@ -81,6 +86,12 @@ class ComplianceAgent(BaseAgent):
             logger.warning("Compliance Agent:  No LLM available, using rule-based validation")
 
         logger.info(f"Compliance Agent has access to {len(self.mcp_client.get_available_tools())} MCP tools")
+
+    def _ensure_audit_connected(self):
+        """Ensure audit logger is connected."""
+        if not self._audit_connected:
+            self.audit. connect()
+            self._audit_connected = True
 
     async def run(
             self,
@@ -335,6 +346,27 @@ class ComplianceAgent(BaseAgent):
             if has_blocking:
                 validation.status = ValidationStatus.DENIED
                 validation.denial_reason = "Blocking compliance violation(s) found"
+            # Log denial to audit
+            if validation.status == ValidationStatus. DENIED:
+                self._ensure_audit_connected()
+                for violation in violations:
+                    if violation.blocking:
+                        self.audit.log_denial(
+                            action_type=validation.action_type,
+                            target_node_id=validation.target_node_id,
+                            target_node_name=validation.target_node_name,
+                            denial_reason=violation. description,
+                            violation_type=violation.violation_type. value,
+                            rule_id=violation. rule_id,
+                            rule_name=violation.rule_name,
+                            resolution_options=violation.resolution_options,
+                            can_override=violation.can_override,
+                            override_requires=violation.override_requires,
+                            recommendation_id=recommendation. id,
+                            compliance_id=compliance_result.id,
+                            action_id=action. id,
+                            agent_name="compliance",
+                        )
             elif violations:
                 # Has violations but none blocking - pending approval
                 validation.status = ValidationStatus.PENDING_APPROVAL
