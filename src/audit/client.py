@@ -31,7 +31,7 @@ class ImmudbConfig:
     def from_env(cls) -> "ImmudbConfig":
         """Create config from environment variables."""
         return cls(
-            host=os.getenv("IMMUDB_HOST", "localhost"),
+            host=os. getenv("IMMUDB_HOST", "localhost"),
             port=int(os.getenv("IMMUDB_PORT", "3322")),
             user=os.getenv("IMMUDB_USER", "immudb"),
             password=os.getenv("IMMUDB_PASSWORD", "immudb"),
@@ -44,34 +44,22 @@ class ImmudbClient:
     Client for immudb operations.
 
     Provides methods to store and retrieve immutable audit records.
-
-    Example:
-        >>> client = ImmudbClient()
-        >>> client. connect()
-        >>> client.set("audit: 123", {"action": "restart", "node":  "router_01"})
-        >>> record = client.get("audit:123")
     """
 
-    def __init__(self, config: Optional[ImmudbConfig] = None):
-        """
-        Initialize immudb client.
+    # Special key to track all audit keys
+    INDEX_KEY = "audit: _index"
 
-        Args:
-            config: immudb configuration (uses environment if not provided)
-        """
+    def __init__(self, config: Optional[ImmudbConfig] = None):
+        """Initialize immudb client."""
         self.config = config or ImmudbConfig.from_env()
         self._client = None
         self._connected = False
         self._use_fallback = False
-        self._fallback_storage: dict = {}
+        self._fallback_storage:  dict = {}
+        self._keys_index: List[str] = []
 
     def connect(self) -> bool:
-        """
-        Connect to immudb.
-
-        Returns:
-            True if connected, False otherwise
-        """
+        """Connect to immudb."""
         try:
             from immudb import ImmudbClient as ImmuClient
 
@@ -80,13 +68,17 @@ class ImmudbClient:
             )
 
             self._client.login(
-                username=self.config.user,
-                password=self.config.password,
+                username=self.config. user,
+                password=self.config. password,
                 database=self.config.database,
             )
 
             self._connected = True
             self._use_fallback = False
+
+            # Load existing keys index
+            self._load_keys_index()
+
             logger.info(f"Connected to immudb at {self.config.host}:{self.config.port}")
             return True
 
@@ -116,29 +108,52 @@ class ImmudbClient:
         """Check if connected to immudb."""
         return self._connected
 
+    def _load_keys_index(self):
+        """Load the keys index from immudb."""
+        if self._use_fallback:
+            return
+
+        try:
+            result = self._client. get(self. INDEX_KEY. encode())
+            if result and result.value:
+                self._keys_index = json.loads(result. value.decode())
+        except Exception:
+            self._keys_index = []
+
+    def _save_keys_index(self):
+        """Save the keys index to immudb."""
+        if self._use_fallback:
+            return
+
+        try:
+            self._client.set(
+                self.INDEX_KEY.encode(),
+                json.dumps(self._keys_index).encode()
+            )
+        except Exception as e:
+            logger.error(f"Failed to save keys index:  {e}")
+
+    def _add_to_index(self, key:  str):
+        """Add a key to the index."""
+        if key not in self._keys_index and key != self.INDEX_KEY:
+            self._keys_index.insert(0, key)  # Add to beginning (newest first)
+            # Keep only last 10000 keys
+            self._keys_index = self._keys_index[: 10000]
+            self._save_keys_index()
+
     def set(self, key: str, value: dict) -> dict:
-        """
-        Store a key-value pair.
-
-        Args:
-            key:  The key to store
-            value: The value (dict) to store
-
-        Returns:
-            Transaction info including verification data
-        """
+        """Store a key-value pair."""
         if not self._connected:
             self.connect()
 
-        value_json = json.dumps(value, default=str)
+        value_json = json. dumps(value, default=str)
 
         if self._use_fallback:
-            # In-memory fallback
             tx_id = len(self._fallback_storage) + 1
             self._fallback_storage[key] = {
                 "value": value_json,
                 "tx_id": tx_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp":  datetime.utcnow().isoformat(),
             }
             return {
                 "tx_id": tx_id,
@@ -148,9 +163,15 @@ class ImmudbClient:
             }
 
         try:
-            result = self._client.set(key.encode(), value_json.encode())
+            result = self._client. set(key.encode(), value_json.encode())
+
+            # Add to index
+            self._add_to_index(key)
+
+            logger.debug(f"Stored key:  {key}")
+
             return {
-                "tx_id": result.id,
+                "tx_id": result. id,
                 "key": key,
                 "verified": True,
                 "fallback": False,
@@ -162,7 +183,7 @@ class ImmudbClient:
             self._fallback_storage[key] = {
                 "value": value_json,
                 "tx_id": tx_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime. utcnow().isoformat(),
             }
             return {
                 "tx_id": tx_id,
@@ -173,15 +194,7 @@ class ImmudbClient:
             }
 
     def get(self, key: str) -> Optional[dict]:
-        """
-        Retrieve a value by key.
-
-        Args:
-            key:  The key to retrieve
-
-        Returns:
-            The stored value or None if not found
-        """
+        """Retrieve a value by key."""
         if not self._connected:
             self.connect()
 
@@ -192,33 +205,24 @@ class ImmudbClient:
             return None
 
         try:
-            result = self._client.get(key.encode())
+            result = self._client. get(key.encode())
             if result and result.value:
-                return json.loads(result.value.decode())
+                return json. loads(result.value.decode())
             return None
         except Exception as e:
             logger.error(f"immudb get error: {e}")
-            # Try fallback
             stored = self._fallback_storage.get(key)
             if stored:
                 return json.loads(stored["value"])
             return None
 
     def verified_get(self, key: str) -> Optional[dict]:
-        """
-        Retrieve a value with cryptographic verification.
-
-        Args:
-            key: The key to retrieve
-
-        Returns:
-            Dict with value and verification info
-        """
+        """Retrieve a value with cryptographic verification."""
         if not self._connected:
-            self.connect()
+            self. connect()
 
         if self._use_fallback:
-            stored = self._fallback_storage.get(key)
+            stored = self._fallback_storage. get(key)
             if stored:
                 return {
                     "value": json.loads(stored["value"]),
@@ -246,12 +250,7 @@ class ImmudbClient:
         """
         Scan for keys with a prefix.
 
-        Args:
-            prefix: Key prefix to search for
-            limit: Maximum number of results
-
-        Returns:
-            List of matching records
+        Uses the keys index to find matching keys.
         """
         if not self._connected:
             self.connect()
@@ -270,75 +269,58 @@ class ImmudbClient:
                         break
             return results
 
-        try:
-            # Use scanAll which is simpler
-            entries = self._client.getAll([prefix.encode()])
+        # Use index to find matching keys
+        matching_keys = [k for k in self._keys_index if k.startswith(prefix)][:limit]
 
-            for key_bytes, value_bytes in entries.items():
-                try:
+        for key in matching_keys:
+            try:
+                value = self.get(key)
+                if value:
                     results.append({
-                        "key": key_bytes.decode() if isinstance(key_bytes, bytes) else key_bytes,
-                        "value": json.loads(value_bytes.decode() if isinstance(value_bytes, bytes) else value_bytes),
+                        "key":  key,
+                        "value": value,
                         "tx_id": None,
                     })
-                except Exception:
-                    pass
+            except Exception as e:
+                logger.error(f"Error getting key {key}: {e}")
 
-                if len(results) >= limit:
-                    break
+        return results
 
-            return results
+    def get_all_keys(self, prefix: str = "audit:", limit: int = 100) -> List[str]:
+        """Get all keys with a prefix."""
+        if self._use_fallback:
+            return [k for k in self._fallback_storage.keys() if k.startswith(prefix)][:limit]
 
-        except Exception as e:
-            logger.error(f"immudb scan error:  {e}")
-            # Fallback to memory
-            for key, stored in self._fallback_storage.items():
-                if key.startswith(prefix):
-                    results.append({
-                        "key": key,
-                        "value": json.loads(stored["value"]),
-                        "tx_id": stored["tx_id"],
-                    })
-                    if len(results) >= limit:
-                        break
-            return results
+        return [k for k in self._keys_index if k.startswith(prefix)][:limit]
 
-    def history(self, key: str, limit: int = 10) -> List[dict]:
-        """
-        Get history of a key (all versions).
-
-        Args:
-            key: The key to get history for
-            limit: Maximum number of versions
-
-        Returns:
-            List of historical values
-        """
+    def history(self, key:  str, limit: int = 10) -> List[dict]:
+        """Get history of a key (all versions)."""
         if not self._connected:
             self.connect()
 
         if self._use_fallback:
-            # Fallback doesn't support history
             stored = self._fallback_storage.get(key)
             if stored:
                 return [{
                     "value": json.loads(stored["value"]),
                     "tx_id": stored["tx_id"],
-                    "timestamp": stored["timestamp"],
+                    "timestamp":  stored["timestamp"],
                 }]
             return []
 
         try:
             history = self._client.history(
                 key=key.encode(),
+                offset=0,
                 limit=limit,
+                desc=True,
             )
 
             results = []
-            for entry in history.entries:
+            for entry in history:
                 results.append({
-                    "value": json.loads(entry.value.decode()),
-                    "tx_id": entry.tx,
+                    "value":  json.loads(entry.value.decode()),
+                    "tx_id": entry. tx,
                 })
             return results
 
@@ -351,22 +333,15 @@ class ImmudbClient:
         if self._use_fallback:
             return {
                 "mode": "fallback",
-                "records": len(self._fallback_storage),
+                "records":  len(self._fallback_storage),
                 "connected": True,
             }
 
-        try:
-            # Basic stats
-            return {
-                "mode": "immudb",
-                "host": self.config.host,
-                "port": self.config.port,
-                "database": self.config.database,
-                "connected": self._connected,
-            }
-        except Exception as e:
-            return {
-                "mode": "unknown",
-                "error": str(e),
-                "connected": False,
-            }
+        return {
+            "mode":  "immudb",
+            "host": self.config. host,
+            "port": self.config.port,
+            "database": self. config.database,
+            "connected": self._connected,
+            "indexed_keys": len(self._keys_index),
+        }
