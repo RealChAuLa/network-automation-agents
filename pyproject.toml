@@ -64,6 +64,7 @@ policy-agent = "src.agents.policy.runner:cli"
 compliance-agent = "src.agents.compliance.runner:cli"
 execution-agent = "src.agents.execution.runner:cli"
 audit = "src.audit.cli:cli"
+orchestrator = "src.orchestrator.cli:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
